@@ -10,6 +10,8 @@ import numpy as np
 import pandas as pd
 from sklearn.metrics import average_precision_score, confusion_matrix, precision_recall_fscore_support, roc_auc_score
 
+from pitch_sitch.baseline import evaluate
+
 
 def per_class_report(y_true, y_pred, classes: list[str]) -> pd.DataFrame:
     precision, recall, f1, support = precision_recall_fscore_support(
@@ -158,6 +160,76 @@ def class_diagnostic_by_group(
     recall = d[d["actual_is_class"] == 1].groupby(group_cols)["pred_is_class"].mean()
     result = result.join(recall.rename("recall"))
     return result.reset_index()
+
+
+def brier_score(y_true, proba: pd.DataFrame, classes: list[str]) -> float:
+    """Multiclass Brier score: mean over rows of the summed squared error
+    between the predicted probability vector and the one-hot true-label
+    vector.
+
+        BS = (1/N) * sum_i sum_k (p_ik - y_ik)^2
+
+    where p_ik is the predicted probability of class k for row i, and
+    y_ik is 1 if row i's true class is k, else 0. Lower is better; a
+    perfect prediction scores 0, and always predicting the uniform
+    distribution over C classes scores (C-1)/C in the worst case."""
+    y_true = pd.Series(y_true).reset_index(drop=True)
+    p = proba[classes].to_numpy(dtype=float)
+    one_hot = np.zeros_like(p)
+    class_index = {c: i for i, c in enumerate(classes)}
+    y_idx = y_true.map(class_index).to_numpy()
+    one_hot[np.arange(len(p)), y_idx] = 1.0
+    return float(np.sum((p - one_hot) ** 2, axis=1).mean())
+
+
+def bootstrap_compare_game_level(
+    test_df: pd.DataFrame,
+    proba_by_model: dict,
+    y_true,
+    classes: list[str],
+    baseline_name: str,
+    n_boot: int = 1000,
+    seed: int = 0,
+) -> dict:
+    """Grouped (game-level) bootstrap: resamples whole games with
+    replacement from test_df["game_pk"], and for each resample computes
+    accuracy/log_loss for every model relative to baseline_name. Models
+    are fit once beforehand -- only the evaluation set is resampled
+    here, so this describes stability across which development games
+    are included, not out-of-sample generalization."""
+    rng = np.random.default_rng(seed)
+    games = test_df["game_pk"].unique()
+    n_games = len(games)
+    game_idx_arr = test_df["game_pk"].to_numpy()
+    idx_by_game = {g: np.where(game_idx_arr == g)[0] for g in games}
+
+    other_names = [n for n in proba_by_model if n != baseline_name]
+    diffs = {n: {"accuracy": [], "log_loss": []} for n in other_names}
+
+    for _ in range(n_boot):
+        sampled_games = rng.choice(games, size=n_games, replace=True)
+        idx = np.concatenate([idx_by_game[g] for g in sampled_games])
+        y_sample = pd.Series(y_true).iloc[idx].reset_index(drop=True)
+
+        base_m = evaluate(y_sample, proba_by_model[baseline_name].iloc[idx].reset_index(drop=True), classes)
+        for n in other_names:
+            m = evaluate(y_sample, proba_by_model[n].iloc[idx].reset_index(drop=True), classes)
+            diffs[n]["accuracy"].append(m["accuracy"] - base_m["accuracy"])
+            diffs[n]["log_loss"].append(m["log_loss"] - base_m["log_loss"])
+
+    summary = {}
+    for n in other_names:
+        acc = np.array(diffs[n]["accuracy"])
+        ll = np.array(diffs[n]["log_loss"])
+        summary[n] = {
+            "accuracy_diff_mean": float(acc.mean()),
+            "accuracy_diff_ci95": [float(np.percentile(acc, 2.5)), float(np.percentile(acc, 97.5))],
+            "p_accuracy_improves": float(np.mean(acc > 0)),
+            "log_loss_diff_mean": float(ll.mean()),
+            "log_loss_diff_ci95": [float(np.percentile(ll, 2.5)), float(np.percentile(ll, 97.5))],
+            "p_log_loss_improves": float(np.mean(ll < 0)),
+        }
+    return summary
 
 
 def per_class_log_loss(y_true, proba: pd.DataFrame, classes: list[str]) -> pd.Series:

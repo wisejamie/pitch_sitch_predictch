@@ -18,6 +18,10 @@ set). Procedure:
 
 No new features, no class weighting (MLPClassifier has no class_weight
 parameter, so this is enforced by the tool itself, not just by choice).
+
+Training/selection logic lives in pitch_sitch/mlp.py, shared with
+scripts/run_mlp_ensemble.py (which freezes the selection this script
+finds rather than re-running it).
 """
 
 import argparse
@@ -25,91 +29,26 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from sklearn.neural_network import MLPClassifier
 
 from pitch_sitch.baseline import evaluate
-from pitch_sitch.design_matrix import build_batter_hand_onehot, build_stand_strikes_interaction, fit_location_means
-from pitch_sitch.evaluation import (
-    binary_discrimination,
-    class_calibration,
-    confidence_coverage,
+from pitch_sitch.design_matrix import fit_location_means
+from pitch_sitch.evaluation import binary_discrimination, class_calibration, confidence_coverage
+from pitch_sitch.mlp import (
+    CLASSES,
+    GRID,
+    INNER_SPLIT_SEED,
+    INNER_SPLIT_TEST_FRAC,
+    SELECTED_CONFIG,
+    SELECTION_SEED,
+    build_features,
+    select_hyperparameters,
 )
 from pitch_sitch.models import fit_logistic, predict_proba_df, scale_numeric
+from pitch_sitch.mlp import fit_mlp_fixed_epochs
+from pitch_sitch.sequence_pipeline import RICHEST_FLAGS, load_sequence_data, numeric_columns_for
 from pitch_sitch.split import assign_game_split
-from pitch_sitch.sequence_pipeline import RICHEST_FLAGS, build_step_features, load_sequence_data, numeric_columns_for
 
-CLASSES = ["FF", "FS", "SL", "OTHER"]
 THRESHOLDS = [0.60, 0.70, 0.75, 0.80, 0.90]
-
-GRID = [
-    {"hidden_layer_sizes": (16,), "alpha": 1e-3},
-    {"hidden_layer_sizes": (16,), "alpha": 1e-2},
-    {"hidden_layer_sizes": (32,), "alpha": 1e-3},
-    {"hidden_layer_sizes": (32,), "alpha": 1e-2},
-    {"hidden_layer_sizes": (32, 16), "alpha": 1e-3},
-    {"hidden_layer_sizes": (32, 16), "alpha": 1e-2},
-]
-
-MAX_EPOCHS = 300
-PATIENCE = 20
-
-
-def build_features(df: pd.DataFrame, location_means: dict) -> pd.DataFrame:
-    return pd.concat(
-        [
-            build_step_features(df, RICHEST_FLAGS, location_means),
-            build_batter_hand_onehot(df),
-            build_stand_strikes_interaction(df),
-        ],
-        axis=1,
-    )
-
-
-def train_with_early_stopping(X_tr, y_tr, X_val, y_val, hidden_layer_sizes, alpha, seed):
-    model = MLPClassifier(
-        hidden_layer_sizes=hidden_layer_sizes,
-        alpha=alpha,
-        activation="relu",
-        solver="adam",
-        max_iter=1,
-        warm_start=True,
-        random_state=seed,
-    )
-    classes = np.array(sorted(y_tr.unique()))
-    best_val_loss = np.inf
-    best_epoch = 0
-    since_improved = 0
-
-    for epoch in range(1, MAX_EPOCHS + 1):
-        model.partial_fit(X_tr, y_tr, classes=classes)
-        proba_val = predict_proba_df(model, X_val, CLASSES)
-        val_loss = evaluate(y_val, proba_val, CLASSES)["log_loss"]
-        if val_loss < best_val_loss - 1e-5:
-            best_val_loss = val_loss
-            best_epoch = epoch
-            since_improved = 0
-        else:
-            since_improved += 1
-        if since_improved >= PATIENCE:
-            break
-
-    return best_val_loss, best_epoch
-
-
-def fit_mlp_fixed_epochs(X_tr, y_tr, hidden_layer_sizes, alpha, n_epochs, seed):
-    model = MLPClassifier(
-        hidden_layer_sizes=hidden_layer_sizes,
-        alpha=alpha,
-        activation="relu",
-        solver="adam",
-        max_iter=1,
-        warm_start=True,
-        random_state=seed,
-    )
-    classes = np.array(sorted(y_tr.unique()))
-    for _ in range(n_epochs):
-        model.partial_fit(X_tr, y_tr, classes=classes)
-    return model
 
 
 def main() -> None:
@@ -137,7 +76,7 @@ def main() -> None:
     print(f"Logistic baseline (stand x strikes): accuracy={metrics_lr['accuracy']:.4f}  log_loss={metrics_lr['log_loss']:.4f}\n")
 
     # ---- Inner game-level split of TRAIN only, for MLP model selection ----
-    inner = assign_game_split(train, test_frac=0.2, seed=123)
+    inner = assign_game_split(train, test_frac=INNER_SPLIT_TEST_FRAC, seed=INNER_SPLIT_SEED)
     inner_train = inner[inner["split"] == "train"].reset_index(drop=True)
     inner_val = inner[inner["split"] == "test"].reset_index(drop=True)
     print(f"Inner split for MLP selection: {inner_train['game_pk'].nunique()} inner-train games "
@@ -149,18 +88,20 @@ def main() -> None:
     y_inner_train, y_inner_val = inner_train["pitch_class"], inner_val["pitch_class"]
 
     print("Hyperparameter grid search (selecting on inner-val log loss only):")
-    results = []
-    for cfg in GRID:
-        val_loss, best_epoch = train_with_early_stopping(
-            X_inner_train_s, y_inner_train, X_inner_val_s, y_inner_val,
-            cfg["hidden_layer_sizes"], cfg["alpha"], seed=0,
-        )
-        print(f"  hidden={cfg['hidden_layer_sizes']!s:<12} alpha={cfg['alpha']:<8} "
-              f"inner_val_log_loss={val_loss:.4f}  best_epoch={best_epoch}")
-        results.append({**cfg, "val_loss": val_loss, "best_epoch": best_epoch})
+    best, results = select_hyperparameters(
+        X_inner_train_s, y_inner_train, X_inner_val_s, y_inner_val, grid=GRID, seed=SELECTION_SEED
+    )
+    for r in results:
+        print(f"  hidden={r['hidden_layer_sizes']!s:<12} alpha={r['alpha']:<8} "
+              f"inner_val_log_loss={r['val_loss']:.4f}  best_epoch={r['best_epoch']}")
 
-    best = min(results, key=lambda r: r["val_loss"])
-    print(f"\nSelected: hidden={best['hidden_layer_sizes']}  alpha={best['alpha']}  epochs={best['best_epoch']}\n")
+    print(f"\nSelected: hidden={best['hidden_layer_sizes']}  alpha={best['alpha']}  epochs={best['best_epoch']}")
+    matches_frozen = (
+        tuple(best["hidden_layer_sizes"]) == tuple(SELECTED_CONFIG["hidden_layer_sizes"])
+        and best["alpha"] == SELECTED_CONFIG["alpha"]
+        and best["best_epoch"] == SELECTED_CONFIG["best_epoch"]
+    )
+    print(f"Matches pitch_sitch.mlp.SELECTED_CONFIG (frozen for run_mlp_ensemble.py): {matches_frozen}\n")
 
     # ---- Refit on the FULL train set for the selected epoch count, across seeds ----
     seed_metrics = []
