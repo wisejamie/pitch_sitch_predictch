@@ -211,3 +211,58 @@ the coarser 6-cell version was preferred.
 **Known limitation, not fixed by this:** the strikes=1/right-handed FS
 calibration gap (~+0.03-0.04) is untouched by this interaction and
 remains an open, unexplained residual.
+
+---
+
+## 2026-07-13 — Adopt the 10-seed MLP probability ensemble as the leading model; retain logistic regression as the interpretable baseline
+
+The working "leading predictive model" is now the arithmetic-mean
+probability ensemble of the 10 already-trained MLP seeds (frozen
+architecture: 2 hidden layers, 32/16 units, alpha=0.001, 19 epochs --
+see `pitch_sitch/mlp.py SELECTED_CONFIG`). The logistic `stand x
+strikes` model is **retained**, not replaced, as the interpretable
+baseline for cases where that matters more than the ensemble's metric
+edge.
+
+**Why:** vs. the logistic baseline, the ensemble improves accuracy
+(0.5688 -> 0.5853), log loss (0.9061 -> 0.8830), and Brier score
+(0.5365 -> 0.5189). The log-loss gain is confirmed stable under
+game-level bootstrap resampling of the development games (95% CI
+[-0.0296, -0.0165], vs. both the logistic baseline and a fixed
+reference seed). This also resolves the two things blocking adoption
+at the end of session 1: individual-seed variance (the ensemble beats
+the mean and 9 of 10 seeds, though not the single luckiest seed) and
+the unverified SL/OTHER question (every individual seed does
+occasionally predict SL, unlike the logistic model; the ensemble
+suppresses this back to near-zero; nothing tested ever predicts
+OTHER).
+
+**Known cost of this decision:** the ensemble is not uniformly better.
+The logistic model has better FF-class calibration (mean |gap| 0.0097
+vs. the ensemble's 0.0204) and better OTHER-class ROC-AUC (0.6967 vs.
+0.6905). Neither model predicts OTHER at all, and the ensemble only
+very rarely predicts SL (0.06% of development pitches, vs. 0% for the
+logistic model).
+
+**How to apply:** use the ensemble as the default reported model going
+forward; use the logistic model when interpretability of individual
+feature effects is required, or as a sanity-check baseline. Continue
+evaluating both, since neither dominates the other in every respect.
+
+**Also decided:** the artifact directory this decision is based on
+(`artifacts/experiments/20260713-mlp-seed-ensemble-v1/`) was committed
+to git as a one-time research record, in a commit separate from the
+implementation code -- a deliberate, explicit exception to the general
+"don't commit generated artifacts" guidance for this specific
+small (~2.8MB), documented experiment, not a change to that guidance.
+An earlier dirty-worktree run of the same experiment was kept locally
+as `...v1-validation` (verified to reproduce identical metrics and
+predictions) but was not committed.
+
+**Not yet decided:** why FF calibration and OTHER discrimination
+specifically resist the ensembling benefit; the strikes=1/right-handed
+residual gap from session 1.
+
+**Provisional to the development set:** as with every decision in this
+file so far, this is based entirely on the repeatedly-used 33-game
+development set, not a held-out test set.
