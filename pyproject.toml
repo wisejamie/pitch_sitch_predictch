@@ -1,0 +1,13 @@
+[project]
+name = "pitch-sitch-predictch"
+version = "0.1.0"
+description = "Exploratory research into predicting a pitcher's next pitch from pre-pitch context."
+requires-python = ">=3.11"
+dependencies = [
+    "pybaseball>=2.2.7",
+    "pandas>=2.0",
+    "scikit-learn>=1.5",
+]
+
+[tool.uv]
+package = false
