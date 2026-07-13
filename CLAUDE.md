@@ -2,6 +2,16 @@
 
 Read `README.md` before doing substantive project work.
 
+## Project context routing
+
+For most substantive work:
+
+1. Read `notes/current-state.md`.
+2. Read `notes/decisions.md` when the task affects methodology.
+3. Read individual files under `notes/sessions/` only when historical reasoning is relevant.
+4. Do not load the complete research history by default.
+5. Prefer authoritative experiment outputs over metrics copied into prose.
+
 ## Project character
 
 This is an exploratory machine-learning research project about predicting a pitcher’s next pitch from pre-pitch context.

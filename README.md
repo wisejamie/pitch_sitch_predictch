@@ -44,11 +44,9 @@ These are working questions, not a fixed project specification.
 
 ## Current phase
 
-The project is currently paused after Session 1 (through 2026-07-13), which completed the goals originally listed here: a working data pipeline, an accepted pitch-type target and game-level train/test split, and a progression of baseline models from frequency lookup tables through logistic regression (with a batter-handedness x count interaction) to a small MLP.
+For what's currently true — the active model, confirmed findings, and current limitations — read `notes/current-state.md`. It's replaced each session, so it stays short.
 
-See `notes/research-log.md` for the full session narrative, cumulative results table, and categorized findings, and `notes/decisions.md` for the accepted methodological decisions behind it.
-
-The project remains exploratory. The 33-game holdout used throughout Session 1 is a development/validation set, not an untouched final test set. Several open questions and a set of longer-term ideas (not accepted decisions) are recorded at the end of the research log.
+For history and reasoning, `notes/research-log.md` is a short index into `notes/sessions/`, where each session's full narrative and results live. `notes/decisions.md` holds the accepted methodological decisions behind all of it.
 
 Important methodological choices should be investigated before they are locked into the implementation.
 
