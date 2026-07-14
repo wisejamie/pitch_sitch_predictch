@@ -10,6 +10,7 @@ import pandas as pd
 
 from pitch_sitch.design_matrix import (
     build_count_game_features,
+    build_prev_bat_tracking_numeric,
     build_prev_class_onehot,
     build_prev_location_numeric,
     build_prev_result_onehot,
@@ -18,7 +19,7 @@ from pitch_sitch.design_matrix import (
 )
 from pitch_sitch.features import add_runner_flags, add_score_diff
 from pitch_sitch.labels import REQUIRED_COLS
-from pitch_sitch.sequence_features import ORDER_COLS, add_history, assign_raw_labels
+from pitch_sitch.sequence_features import BAT_TRACKING_COLS, ORDER_COLS, add_history, assign_raw_labels
 from pitch_sitch.workload_features import add_workload_features
 
 RICHEST_FLAGS = {
@@ -42,7 +43,13 @@ def load_clean_pitch_log(cache_file: Path, score_diff_bound: int = 6) -> pd.Data
     df = pd.read_parquet(cache_file)
     df = df.sort_values(ORDER_COLS).reset_index(drop=True)
     df = assign_raw_labels(df)
-    df = add_history(df, class_depths=(1, 2, 3), result_depths=(1, 2, 3), location_depths=(1, 2, 3))
+    df = add_history(
+        df,
+        class_depths=(1, 2, 3),
+        result_depths=(1, 2, 3),
+        location_depths=(1, 2, 3),
+        bat_tracking_depths=(1,),
+    )
     df = add_workload_features(df)
 
     df = df[df[REQUIRED_COLS].notna().all(axis=1)].copy()
@@ -74,6 +81,8 @@ def build_step_features(df: pd.DataFrame, flags: dict, location_means: dict) -> 
             parts.append(build_prev_result_onehot(df, k))
         if flags.get(f"prev{k}_location"):
             parts.append(build_prev_location_numeric(df, k, location_means))
+        if flags.get(f"prev{k}_bat_tracking"):
+            parts.append(build_prev_bat_tracking_numeric(df, k, location_means))
     return pd.concat([p.reset_index(drop=True) for p in parts], axis=1)
 
 
@@ -85,14 +94,22 @@ def location_columns_for(flags: dict) -> list[str]:
     return cols
 
 
+def bat_tracking_columns_for(flags: dict) -> list[str]:
+    cols = []
+    for k in (1, 2, 3):
+        if flags.get(f"prev{k}_bat_tracking"):
+            cols += [f"prev_{k}_{c}" for c in BAT_TRACKING_COLS]
+    return cols
+
+
 def numeric_columns_for(flags: dict) -> list[str]:
-    return list(NUMERIC_BASE) + location_columns_for(flags)
+    return list(NUMERIC_BASE) + location_columns_for(flags) + bat_tracking_columns_for(flags)
 
 
 def fit_sequence_logistic(train: pd.DataFrame, test: pd.DataFrame, flags: dict, class_weight=None):
     from pitch_sitch.models import fit_logistic, scale_numeric
 
-    location_means = fit_location_means(train, location_columns_for(flags))
+    location_means = fit_location_means(train, location_columns_for(flags) + bat_tracking_columns_for(flags))
     X_train = build_step_features(train, flags, location_means)
     X_test = build_step_features(test, flags, location_means)
 

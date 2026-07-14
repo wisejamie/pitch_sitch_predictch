@@ -9,7 +9,7 @@ produce identically-shaped matrices.
 
 import pandas as pd
 
-from pitch_sitch.sequence_features import CLASS_HISTORY_CATEGORIES, RESULT_HISTORY_CATEGORIES
+from pitch_sitch.sequence_features import BAT_TRACKING_COLS, CLASS_HISTORY_CATEGORIES, RESULT_HISTORY_CATEGORIES
 
 BALLS_VALUES = [0, 1, 2, 3]
 STRIKES_VALUES = [0, 1, 2]
@@ -116,6 +116,19 @@ def build_prev_location_numeric(df: pd.DataFrame, k: int, means: dict[str, float
     missing history, plus an explicit has-value flag so the model can
     distinguish an imputed placeholder from a real observed location."""
     cols = [f"prev_{k}_plate_x", f"prev_{k}_plate_z"]
+    out = pd.DataFrame(index=df.index)
+    for c in cols:
+        out[f"{c}_has_value"] = df[c].notna().astype(int)
+        out[c] = df[c].fillna(means[c])
+    return out.reset_index(drop=True)
+
+
+def build_prev_bat_tracking_numeric(df: pd.DataFrame, k: int, means: dict[str, float]) -> pd.DataFrame:
+    """Numeric prev_k bat-tracking measurements, mean-imputed (train-
+    derived) wherever missing -- PA start, pre-2023, or (much more often)
+    the previous pitch simply wasn't swung at -- plus an explicit
+    has-value flag per field, same pattern as build_prev_location_numeric."""
+    cols = [f"prev_{k}_{c}" for c in BAT_TRACKING_COLS]
     out = pd.DataFrame(index=df.index)
     for c in cols:
         out[f"{c}_has_value"] = df[c].notna().astype(int)

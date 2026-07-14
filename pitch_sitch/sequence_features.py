@@ -18,6 +18,21 @@ PA_GROUP_COLS = ["game_pk", "at_bat_number"]
 
 CLASS_HISTORY_CATEGORIES = ["FF", "FS", "SL", "OTHER", "NONE"]
 
+# Raw Statcast bat-tracking measurements. Populated only when the previous
+# pitch was swung at (roughly half of swing rows even then), and only from
+# 2023 onward (0% in 2022) -- see notes/decisions.md for the missingness
+# audit. miss_distance is far sparser still (populated for whiffs only).
+BAT_TRACKING_COLS = [
+    "bat_speed",
+    "swing_length",
+    "attack_angle",
+    "attack_direction",
+    "swing_path_tilt",
+    "intercept_ball_minus_batter_pos_x_inches",
+    "intercept_ball_minus_batter_pos_y_inches",
+    "miss_distance",
+]
+
 RESULT_MAP = {
     "ball": "ball",
     "blocked_ball": "ball",
@@ -57,6 +72,7 @@ def add_history(
     class_depths: tuple[int, ...] = (1, 2, 3),
     result_depths: tuple[int, ...] = (1,),
     location_depths: tuple[int, ...] = (1,),
+    bat_tracking_depths: tuple[int, ...] = (),
 ) -> pd.DataFrame:
     df = df.sort_values(ORDER_COLS).reset_index(drop=True)
     grouped = df.groupby(PA_GROUP_COLS, sort=False)
@@ -70,5 +86,9 @@ def add_history(
     for k in location_depths:
         df[f"prev_{k}_plate_x"] = grouped["plate_x"].shift(k)
         df[f"prev_{k}_plate_z"] = grouped["plate_z"].shift(k)
+
+    for k in bat_tracking_depths:
+        for c in BAT_TRACKING_COLS:
+            df[f"prev_{k}_{c}"] = grouped[c].shift(k)
 
     return df
