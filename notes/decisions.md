@@ -266,3 +266,46 @@ residual gap from session 1.
 **Provisional to the development set:** as with every decision in this
 file so far, this is based entirely on the repeatedly-used 33-game
 development set, not a held-out test set.
+
+---
+
+## 2026-07-14 — Broad bat-tracking feature bundle tested and not adopted; more targeted conditional analysis remains open
+
+Tested adding 8 raw Statcast bat-tracking measurements at prev_1
+(bat speed, swing length, attack angle/direction, swing path tilt, two
+contact-point offset fields, miss distance;
+`pitch_sitch.design_matrix.build_prev_bat_tracking_numeric`) to the
+working 56-feature baseline. On the 131/33 split, logistic and a
+single-reference-seed MLP both moved in the positive direction on
+accuracy and log loss, but every delta stayed inside the noise floor
+already established by earlier feature experiments. **Not part of the
+working model.**
+
+A parallel, separately-scoped side project (`feature/estimated-swing-
+timing` branch, paused) explored whether a genuine pitch-level swing-
+timing label could be constructed via weak supervision against
+Baseball Savant's aggregated Swing Timing metric, since no pitch-level
+timing label is publicly available. It found a stable late-swing (not
+early-swing) signal under held-out-pitcher and 2025 temporal
+validation, but blinded video review found ~30% of a "swing"-labeled
+sample were actually bunts/check-swings, concentrated in the
+estimator's most extreme buckets -- a real Statcast `description`-
+field data-quality gap. This branch is paused, not abandoned.
+
+**Why not adopted (bat-tracking bundle):** the fields are populated
+only when the previous pitch was swung at (~30% of rows) and only from
+2023 onward, with `miss_distance` populated only on whiffs (~7%) --
+most rows fall back to the imputed mean, likely limiting the signal
+available to a bundle-level test.
+
+**Not yet decided / worth exploring later:**
+- Whether a more targeted, conditional treatment of individual
+  bat-tracking fields (rather than one bundle) performs differently.
+- Whether resuming the estimated-swing-timing side project is
+  worthwhile once a better swing/no-swing detection method addresses
+  the bunt/check-swing contamination -- plausibly a doable, worthwhile
+  deeper exploration, but deliberately not the current focus.
+
+See `notes/sessions/003-richness-bat-tracking-and-timing-pause.md` for
+the full session narrative, including the also-negative prev_2/prev_3
+richness test from the same session.

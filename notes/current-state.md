@@ -59,6 +59,25 @@ handedness, and a `stand x strikes` interaction.
   model (FS calibration gap flips sign between 0 and 2 strikes).
 - The ensemble is not uniformly better than the logistic model: the
   logistic model has better FF calibration and better OTHER ROC-AUC.
+- Baseball Savant's public Swing Timing metric is aggregated-only (no
+  pitch-level label exists); a weakly-supervised, cross-pitcher
+  pitch-level estimate can be fit and shows a stable *late*-swing
+  signal (not early) under held-out-pitcher and 2025 temporal
+  validation, but blinded video review found ~30% of a "swing"-labeled
+  sample were actually bunts/check-swings, concentrated in the
+  estimator's most extreme buckets -- a real Statcast `description`
+  data-quality gap. See session 003; this side branch
+  (`feature/estimated-swing-timing`) is paused, not abandoned.
+
+## Tested and not adopted
+
+- Matching prev_2/prev_3's feature richness to prev_1 (result +
+  location, not just class): noise-floor gains only.
+- A broad bundle of 8 raw prev_1 bat-tracking measurements (bat speed,
+  swing length, attack angle/direction, swing path tilt, contact-point
+  offsets, miss distance): noise-floor gains only, likely limited by
+  severe compounding sparsity (populated only when the previous pitch
+  was swung at, and only from 2023 on). See session 003.
 
 ## Current limitations
 
@@ -80,3 +99,8 @@ most immediately relevant, not yet decided:
 - Investigating the unexplained strikes=1/right-handed residual gap.
 - Establishing a genuine held-out test set before treating any result
   here as a generalization claim.
+- A more targeted (non-bundle, conditional) treatment of raw
+  bat-tracking features, if revisited.
+- Resuming the estimated-swing-timing side project once a better
+  swing/no-swing detection method addresses the bunt/check-swing
+  contamination -- plausibly worthwhile, not currently the focus.
