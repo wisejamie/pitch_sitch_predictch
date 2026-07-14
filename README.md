@@ -15,10 +15,11 @@ The current 10-model neural-network ensemble is **58.5% accurate across all pitc
 
 ## Results at a glance
 
-| Prediction rule                | Accuracy | Pitch coverage |
-| ------------------------------- | -------: | --------------: |
-| Predict every pitch             | **58.5%** |            100% |
-| Act only when confidence ≥ 65%  | **75.0%** |            23.0% |
+| Prediction rule                |  Accuracy | Pitch coverage |
+| ------------------------------ | --------: | -------------: |
+| Predict every pitch            | **58.5%** |           100% |
+| Act only when confidence ≥ 65% | **75.0%** |          23.0% |
+| Act only when confidence ≥ 75% | **83.6%** |           8.1% |
 
 Full threshold-by-threshold breakdown and chart: see [Selective prediction](#selective-prediction) below.
 
@@ -49,14 +50,16 @@ The project asks:
 
 The practical value may not require predicting every pitch correctly.
 
-For example, an imagined decision-support system could display:
+For example, an imagined decision-support system wouldn't need to show the same kind of message for every pitch — it could distinguish between situations where it has a strong read and situations where it doesn't. (The two boxes below are a hypothetical mockup of what that output might look like, not a real prediction pulled from the data.)
+
+When the model is confident:
 
 ```
 Likely next pitch: Four-seam fastball
 Model probability: 76%
 ```
 
-When the model is uncertain:
+When it isn't — the probability spread across multiple pitch types instead of concentrated on one:
 
 ```
 No strong prediction
@@ -66,7 +69,7 @@ SL: 16%
 OTHER: 6%
 ```
 
-The current high-confidence regime is primarily a **fastball-versus-splitter prediction problem**. The model rarely makes slider predictions and does not currently predict `OTHER` as its top class.
+The system would only be worth acting on in cases like the first. The current high-confidence regime is primarily a **fastball-versus-splitter prediction problem**. The model rarely makes slider predictions and does not currently predict `OTHER` as its top class.
 
 ---
 
@@ -135,28 +138,35 @@ Pitch history resets at the beginning of each plate appearance.
 
 Batter identity is retained in the data but is not currently used as a direct model input.
 
+### Future features I'd like to test
+
+- swing timing of previous pitches (early, on-time, late) — could carry real signal.
+  - example intution: pitcher is likely to follow up a late swing on a fastball with another fastball.
+  - problem: Savant publishes early/on-time/late as aggregated season/pitch-type rates, not per pitch. It's likely derived from per-pitch bat-tracking geometry (e.g. where the bat's sweet spot crosses the ball's path relative to the batter) that is publicly available. Would need to devise formula for labelling myself.
+- richer batter information (batter identity / batter-specific tendencies), rather than handedness alone.
+
 ---
 
 ## Model progression
 
-The project started with simple empirical baselines and added complexity only when the simpler approach stopped working.
+The project started with simple empirical baselines and added complexity incrementally, keeping each addition only when it measurably improved results.
 
-| Model                                 |  Accuracy |   Log loss |
-| -------------------------------------- | --------: | ---------: |
-| Global pitch tendency                  |     52.1% |     1.0080 |
-| Count lookup table                     |     55.6% |     0.9559 |
-| Count + game-state lookup              |     50.5% |     4.1806 |
-| Multinomial logistic regression        |     56.3% |     0.9515 |
-| Logistic + pitch history                |     56.9% |     0.9371 |
-| Logistic + handedness interaction       |     56.9% |     0.9061 |
-| Average individual MLP                  |     58.2% |     0.8930 |
-| **10-seed MLP probability ensemble**    | **58.5%** | **0.8830** |
+| Model                                |  Accuracy |   Log loss |
+| ------------------------------------ | --------: | ---------: |
+| Global pitch tendency                |     52.1% |     1.0080 |
+| Count lookup table                   |     55.6% |     0.9559 |
+| Count + game-state lookup            |     50.5% |     4.1806 |
+| Multinomial logistic regression      |     56.3% |     0.9515 |
+| Logistic + pitch history             |     56.9% |     0.9371 |
+| Logistic + handedness interaction    |     56.9% |     0.9061 |
+| Average individual MLP               |     58.2% |     0.8930 |
+| **10-seed MLP probability ensemble** | **58.5%** | **0.8830** |
 
 ![Model progression: accuracy and log loss across the project's model history](figures/model_progression.png)
 
 The count-and-game-state lookup table failed because the feature combinations became extremely sparse (visible as the log-loss spike to 4.18 above) — logistic regression solved this by sharing statistical strength across situations.
 
-A small multilayer perceptron then improved both accuracy and probability quality. The final model averages the predicted probability vectors from ten independently initialized neural networks.
+A small multilayer perceptron then improved both accuracy and probability quality. This improvement is due to its ability to discover useful feature combinations instead of relying on manually engineered interaction terms. The final model averages the predicted probability vectors from ten independently initialized neural networks.
 
 ### Current leading model
 
@@ -215,13 +225,13 @@ It is not merely assigning large probabilities without corresponding performance
 
 All figures below are on the 33-game development set (n=3,096 pitches).
 
-| Mode            | Threshold |  Accuracy | Coverage | Pitches selected |
-| ---------------- | --------: | --------: | -------: | ----------------: |
-| Broad             |      ≥55% |     66.3% |    59.5% |              1,842 |
-| Balanced          |      ≥60% |     70.9% |    38.5% |              1,193 |
-| Selective         |      ≥65% |     75.0% |    23.0% |                712 |
-| High confidence   |      ≥70% |     78.5% |    13.7% |                423 |
-| Very high confidence | ≥75%   |     83.6% |     8.1% |                250 |
+| Mode                 | Threshold | Accuracy | Coverage | Pitches selected |
+| -------------------- | --------: | -------: | -------: | ---------------: |
+| Broad                |      ≥55% |    66.3% |    59.5% |            1,842 |
+| Balanced             |      ≥60% |    70.9% |    38.5% |            1,193 |
+| Selective            |      ≥65% |    75.0% |    23.0% |              712 |
+| High confidence      |      ≥70% |    78.5% |    13.7% |              423 |
+| Very high confidence |      ≥75% |    83.6% |     8.1% |              250 |
 
 These are candidate operating points, not finalized deployment thresholds.
 
@@ -369,17 +379,10 @@ artifacts/experiments/20260713-mlp-seed-ensemble-v1/
 
 ## Next steps
 
-### Immediate
-
-- Add game-level bootstrap confidence intervals to the selective-prediction results.
-- Compare the ensemble against simple baselines on the exact high-confidence pitches it selects.
-- Freeze candidate confidence thresholds.
-- Evaluate prospectively on future untouched Gausman games.
-
 ### Modelling
 
 - Investigate richer batter information.
-- Explore more targeted uses of bat-tracking measurements.
+- Explore more targeted uses of bat-tracking measurements on previous pitches.
 - Model pitch location after pitch-type prediction is better established.
 
 ### Generalization
