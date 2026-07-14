@@ -50,26 +50,7 @@ The project asks:
 
 The practical value may not require predicting every pitch correctly.
 
-For example, an imagined decision-support system wouldn't need to show the same kind of message for every pitch — it could distinguish between situations where it has a strong read and situations where it doesn't. (The two boxes below are a hypothetical mockup of what that output might look like, not a real prediction pulled from the data.)
-
-When the model is confident:
-
-```
-Likely next pitch: Four-seam fastball
-Model probability: 76%
-```
-
-When it isn't — the probability spread across multiple pitch types instead of concentrated on one:
-
-```
-No strong prediction
-FF: 41%
-FS: 37%
-SL: 16%
-OTHER: 6%
-```
-
-The system would only be worth acting on in cases like the first. The current high-confidence regime is primarily a **fastball-versus-splitter prediction problem**. The model rarely makes slider predictions and does not currently predict `OTHER` as its top class.
+The most realistic use case is pre-game or pre-series prep — a hitter or coaching staff studying which situations make one pitch substantially more likely, similar to existing advance-scouting reports, just quantified. (A live, in-game version of this — relaying high-confidence predictions to a hitter during the at-bat, even via a human hand signal rather than electronics — might edge into MLB's sign-stealing rules, but would be extremely useful.)
 
 ---
 
@@ -141,7 +122,7 @@ Batter identity is retained in the data but is not currently used as a direct mo
 ### Future features I'd like to test
 
 - swing timing of previous pitches (early, on-time, late) — could carry real signal.
-  - example intution: pitcher is likely to follow up a late swing on a fastball with another fastball.
+  - example intuition: pitcher is likely to follow up a late swing on a fastball with another fastball.
   - problem: Savant publishes early/on-time/late as aggregated season/pitch-type rates, not per pitch. It's likely derived from per-pitch bat-tracking geometry (e.g. where the bat's sweet spot crosses the ball's path relative to the batter) that is publicly available. Would need to devise formula for labelling myself.
 - richer batter information (batter identity / batter-specific tendencies), rather than handedness alone.
 
