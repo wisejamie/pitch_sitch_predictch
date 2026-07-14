@@ -216,6 +216,19 @@ All figures below are on the 33-game development set (n=3,096 pitches).
 
 These are candidate operating points, not finalized deployment thresholds.
 
+Confidence also behaves sensibly across different counts. The model is almost always confident in heavily fastball-skewed counts such as 3-0 and 3-1, but it rarely reaches the 65% threshold at 1-1, where Gausman's fastball and splitter usage is close to evenly divided.
+
+More importantly, it identifies smaller predictable subsets inside otherwise less obvious counts:
+
+| Count | Pitches selected | Coverage | Accuracy |
+|---|---:|---:|---:|
+| 0-1 | 54 | 13.4% | 79.6% |
+| 1-2 | 51 | 15.4% | 84.3% |
+| 0-2 | 50 | 22.4% | 74.0% |
+| 2-2 | 49 | 16.8% | 71.4% |
+
+These results support the selective-prediction interpretation: the model does not treat every pitch within a count as equally predictable. It abstains on most cases and surfaces only the situations where the combination of count, recent sequence, handedness, and game context creates a stronger signal.
+
 ### What drives the model's confident predictions?
 
 Some of the model's most confident calls turn out to match simple, human-readable rules. At 3-0, the model (and Gausman) essentially always goes with the fastball — 96.2% accuracy on the 26 dev-set pitches at that count within the ≥75%-confidence group. At 0-1, the model often repeats whichever pitch just earned the first strike; at 2-2, it reacts to what the previous pitch was and how it resolved (a splitter that missed the zone tends to get followed by a fastball; a splitter that got ahead in the count tends to get repeated).
