@@ -216,6 +216,14 @@ All figures below are on the 33-game development set (n=3,096 pitches).
 
 These are candidate operating points, not finalized deployment thresholds.
 
+### What drives the model's confident predictions?
+
+Some of the model's most confident calls turn out to match simple, human-readable rules. At 3-0, the model (and Gausman) essentially always goes with the fastball — 96.2% accuracy on the 26 dev-set pitches at that count within the ≥75%-confidence group. At 0-1, the model often repeats whichever pitch just earned the first strike; at 2-2, it reacts to what the previous pitch was and how it resolved (a splitter that missed the zone tends to get followed by a fastball; a splitter that got ahead in the count tends to get repeated).
+
+Applied indiscriminately — to every pitch at each count, regardless of whether the model itself is confident — a compact rule set built from these patterns reaches only about 57% accuracy: close to logistic regression's 56.9%, and below the 58.5% neural-network ensemble. The much larger accuracy seen above at specific counts (79.6% at 0-1, 71.4% at 2-2) only shows up on the subset of pitches where the ensemble *also* flags the situation as confident — not across the count as a whole.
+
+This suggests the model's value is not merely learning broad pitching tendencies. It is learning *when* those tendencies are reliable enough to act on.
+
 ---
 
 ## What the model currently does well
