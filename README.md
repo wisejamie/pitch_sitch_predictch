@@ -1,61 +1,406 @@
 # Pitch Sitch Predictch
 
-Pitch Sitch Predictch is an exploratory machine-learning project about predicting a pitcher’s next pitch from the situation immediately before it is thrown.
+![Kevin Gausman delivering a pitch for the Toronto Blue Jays](figures/gausman.jpeg)
 
-The central idea is to represent a pre-pitch situation using information such as:
+**Can a machine-learning model identify when an MLB pitcher becomes predictable?**
+
+Pitch Sitch Predictch is an exploratory next-pitch prediction project built around Kevin Gausman. Using only information available before the pitch is thrown, the model estimates the probability that his next pitch will be a:
+
+- four-seam fastball (`FF`);
+- splitter (`FS`);
+- slider (`SL`);
+- different pitch type (`OTHER`).
+
+The current 10-model neural-network ensemble is **58.5% accurate across all pitches**. More importantly, its confidence is useful: when the model is allowed to abstain from uncertain situations, accuracy rises substantially.
+
+## Results at a glance
+
+| Prediction rule                | Accuracy | Pitch coverage |
+| ------------------------------- | -------: | --------------: |
+| Predict every pitch             | **58.5%** |            100% |
+| Act only when confidence ≥ 65%  | **75.0%** |            23.0% |
+
+Full threshold-by-threshold breakdown and chart: see [Selective prediction](#selective-prediction) below.
+
+This suggests that the model is more valuable as a **selective predictor** than as an always-on classifier.
+
+Rather than making a recommendation before every pitch, a practical system could wait until it encounters an unusually predictable situation.
+
+> On the roughly 23% of pitches where the model assigns at least 65% confidence, it is currently 75% accurate.
+
+These results come from a repeatedly inspected 33-game development set. They describe the model’s current behaviour, but they are **not yet an untouched out-of-sample performance claim**. I plan on testing on future Gausman starts as he continues to pitch in the 2026 season.
+
+---
+
+## The baseball question
+
+Pitch selection is not random. It can depend on:
 
 - the count;
-- batter and pitcher handedness;
-- inning, outs, score, and baserunners;
-- recent pitch history;
-- batter and pitcher tendencies;
-- other information available before the pitch.
+- batter handedness;
+- inning, score, outs, and baserunners;
+- the previous pitch and its result;
+- recent pitch sequencing;
+- a pitcher’s repertoire and strategic tendencies.
 
-A model could then estimate a probability distribution over the pitcher’s next decision, potentially including pitch type, location, or physical pitch characteristics.
+The project asks:
 
-## Initial case study
+> Can these signals identify situations where one pitch becomes likely enough to provide useful information to a batter, coach, analyst, or pitcher?
 
-The first exploration will focus on Kevin Gausman.
+The practical value may not require predicting every pitch correctly.
 
-Gausman is a useful starting point because he has a large recent sample and a concentrated arsenal built primarily around his four-seam fastball and splitter. This creates a relatively understandable first setting in which to investigate:
+For example, an imagined decision-support system could display:
 
-- how predictable pitch selection is;
-- which contextual features contain useful information;
-- how much data is required;
-- whether the model can identify particularly predictable situations;
-- what level of predictive confidence might become meaningful to a batter or analyst.
+```
+Likely next pitch: Four-seam fastball
+Model probability: 76%
+```
 
-Gausman is the first case study, but the project should be designed conceptually around a general pitcher rather than around Gausman-specific assumptions.
+When the model is uncertain:
 
-## Broad research questions
+```
+No strong prediction
+FF: 41%
+FS: 37%
+SL: 16%
+OTHER: 6%
+```
 
-The project may explore questions such as:
+The current high-confidence regime is primarily a **fastball-versus-splitter prediction problem**. The model rarely makes slider predictions and does not currently predict `OTHER` as its top class.
 
-1. How predictable is a pitcher’s next pitch from pre-pitch context?
-2. Which parts of the situation contribute the most predictive information?
-3. How should a pitch situation be represented?
-4. How much pitcher-specific data is required?
-5. Is overall accuracy the right measure, or is high accuracy on a smaller set of high-confidence situations more meaningful?
-6. How much of pitch selection is shared across pitchers?
-7. Can a model trained across many pitchers adapt efficiently to one specific pitcher?
-8. Can pitch location or pitch characteristics be modelled after pitch-type prediction is understood?
+---
 
-These are working questions, not a fixed project specification.
+## Why Kevin Gausman?
 
-## Current phase
+Gausman’s repertoire is heavily concentrated around two pitches: his four-seam fastball and splitter.
 
-For what's currently true — the active model, confirmed findings, and current limitations — read `notes/current-state.md`. It's replaced each session, so it stays short.
+Across the cleaned modelling dataset, those two pitches account for **87.9% of everything he throws**.
 
-For history and reasoning, `notes/research-log.md` is a short index into `notes/sessions/`, where each session's full narrative and results live. `notes/decisions.md` holds the accepted methodological decisions behind all of it.
+| Pitch class               | Count |  Share |
+| ------------------------- | ----: | -----: |
+| Four-seam fastball (`FF`) | 7,554 | 51.13% |
+| Splitter (`FS`)           | 5,424 | 36.72% |
+| Slider (`SL`)             | 1,533 | 10.38% |
+| Other (`OTHER`)           |   262 |  1.77% |
 
-Important methodological choices should be investigated before they are locked into the implementation.
+![Kevin Gausman pitch-type distribution](figures/gausman_pitch_distribution.png)
 
-## Working principles
+This creates a deceptively difficult prediction problem. An always-fastball baseline is already correct on **52.07% of pitches in the development set**. A useful model therefore needs to do more than identify his most common pitch: it needs to determine when the situation points toward the fastball and when it points toward the splitter.
 
-- Use only information that would have been available before the target pitch.
-- Begin with simple, interpretable baselines.
-- Keep exploratory conclusions separate from confirmed findings.
-- Prefer small experiments that answer one question at a time.
-- Record important decisions and why they were made.
-- Allow the repository structure to develop with the project.
-- Avoid adding complex modelling or agent infrastructure before it serves a demonstrated need.
+The current ensemble improves overall development-set accuracy from **52.07% to 58.53%**, while its greatest value comes from identifying smaller subsets of much more predictable situations.
+
+### Repertoire by season
+
+Gausman’s core fastball-splitter usage has remained relatively stable, although the smaller pitch classes have changed over time.
+
+![Kevin Gausman pitch-type distribution by season](figures/gausman_pitch_distribution_by_season.png)
+
+`OTHER` is only 1.77% of the full dataset, but it is not one consistent pitch family. It includes sinkers, changeups, and sweepers. Most notably, Gausman briefly added a sinker in 2024, when `OTHER` rose to **6.20%** of his pitches, before nearly disappearing again in 2025.
+
+This is a known limitation of the four-class target: `OTHER` is largely irrelevant to overall accuracy, but it can hide meaningful temporary repertoire changes.
+
+Gausman is the first case study, not the intended limit of the project. A longer-term goal is to train across many pitchers and adapt the shared model to individual pitchers.
+
+(Another reason for Gausman: he has been a bonafide ace for my Toronto Blue Jays the last few seasons.)
+
+---
+
+## Model inputs
+
+The current model uses 56 features, all derived from information available before the target pitch.
+
+### Count and plate-appearance state
+
+- balls and strikes;
+- outs;
+- inning;
+- top or bottom half;
+- score differential;
+- runners on first, second, and third.
+
+### Recent pitch sequence
+
+- previous pitch type;
+- previous pitch result;
+- previous pitch location;
+- pitch type two pitches ago;
+- pitch type three pitches ago.
+
+Pitch history resets at the beginning of each plate appearance.
+
+### Matchup information
+
+- batter handedness;
+- interaction between batter handedness and number of strikes.
+
+Batter identity is retained in the data but is not currently used as a direct model input.
+
+---
+
+## Model progression
+
+The project started with simple empirical baselines and added complexity only when the simpler approach stopped working.
+
+| Model                                 |  Accuracy |   Log loss |
+| -------------------------------------- | --------: | ---------: |
+| Global pitch tendency                  |     52.1% |     1.0080 |
+| Count lookup table                     |     55.6% |     0.9559 |
+| Count + game-state lookup              |     50.5% |     4.1806 |
+| Multinomial logistic regression        |     56.3% |     0.9515 |
+| Logistic + pitch history                |     56.9% |     0.9371 |
+| Logistic + handedness interaction       |     56.9% |     0.9061 |
+| Average individual MLP                  |     58.2% |     0.8930 |
+| **10-seed MLP probability ensemble**    | **58.5%** | **0.8830** |
+
+![Model progression: accuracy and log loss across the project's model history](figures/model_progression.png)
+
+The count-and-game-state lookup table failed because the feature combinations became extremely sparse (visible as the log-loss spike to 4.18 above) — logistic regression solved this by sharing statistical strength across situations.
+
+A small multilayer perceptron then improved both accuracy and probability quality. The final model averages the predicted probability vectors from ten independently initialized neural networks.
+
+### Current leading model
+
+- two hidden layers: 32 and 16 units;
+- regularization parameter: `alpha=0.001`;
+- 19 training epochs;
+- ten independently initialized models;
+- arithmetic mean of their class probabilities.
+
+The ensemble achieved:
+
+- **Accuracy:** 0.5853
+- **Log loss:** 0.8830
+- **Brier score:** 0.5189
+
+The logistic model remains in the project as an interpretable baseline.
+
+---
+
+## Selective prediction
+
+Overall accuracy hides one of the project’s most important findings:
+
+> The model is substantially better in the situations where it says it is confident.
+
+The model’s confidence is defined as the largest class probability in its output distribution.
+
+For a threshold `t`, the system acts only when:
+
+```
+max_k P(Y = k | x) >= t
+```
+
+Two quantities then matter:
+
+### Accuracy
+
+How often is the selected pitch correct?
+
+### Coverage
+
+What proportion of pitches exceed the confidence threshold?
+
+As the confidence threshold rises, coverage falls but accuracy increases.
+
+![Ensemble accuracy vs. coverage as the confidence threshold rises](figures/confidence_accuracy_coverage.png)
+
+The model is also reasonably calibrated across most of the observed confidence range. For example, among pitches with at least 60% confidence:
+
+- mean model confidence: **69.1%**;
+- realized accuracy: **70.9%**.
+
+It is not merely assigning large probabilities without corresponding performance.
+
+### Possible operating modes
+
+All figures below are on the 33-game development set (n=3,096 pitches).
+
+| Mode            | Threshold |  Accuracy | Coverage | Pitches selected |
+| ---------------- | --------: | --------: | -------: | ----------------: |
+| Broad             |      ≥55% |     66.3% |    59.5% |              1,842 |
+| Balanced          |      ≥60% |     70.9% |    38.5% |              1,193 |
+| Selective         |      ≥65% |     75.0% |    23.0% |                712 |
+| High confidence   |      ≥70% |     78.5% |    13.7% |                423 |
+| Very high confidence | ≥75%   |     83.6% |     8.1% |                250 |
+
+These are candidate operating points, not finalized deployment thresholds.
+
+---
+
+## What the model currently does well
+
+### It finds predictable situations
+
+Accuracy rises cleanly as confidence rises. The model is not equally uncertain on every pitch.
+
+### It improves probability quality
+
+The ensemble beats the strongest logistic baseline on:
+
+- accuracy;
+- log loss;
+- Brier score.
+
+### It captures nonlinear interactions
+
+The neural model improves on the linear baseline without requiring every interaction to be manually specified.
+
+### It distinguishes fastballs from splitters
+
+The strongest current use case is identifying situations where Gausman is especially likely to throw one of his two main pitches.
+
+---
+
+## What the model does not yet do well
+
+### Slider and OTHER predictions
+
+The ensemble predicts slider as its top class on **0.06%** of development-set pitches, and never predicts `OTHER` (0.00%) — despite those classes making up 10.4% and 1.8% of what Gausman actually throws.
+
+This does not mean the probabilities contain no information about those classes. It means their predicted probability rarely becomes larger than the fastball or splitter probability.
+
+### Generalization beyond Gausman
+
+The current model is trained specifically on one pitcher.
+
+### Location prediction
+
+The model predicts pitch type only. It does not yet predict where the pitch will be located.
+
+### Proven batter value
+
+Predicting the pitch correctly does not automatically prove that a batter would perform better after receiving the prediction.
+
+A real decision system would need to account for the asymmetric cost of being wrong:
+
+```
+EV(sit on pitch) = p*A - (1-p)*B
+```
+
+where:
+
+- `p` is the probability that the predicted pitch occurs;
+- `A` is the value of correctly anticipating it;
+- `B` is the cost of anticipating the wrong pitch.
+
+The required confidence threshold depends on the real baseball values of `A` and `B`.
+
+---
+
+## Evaluation design
+
+Pitches are split at the **game level**, not individually.
+
+All pitches from a game remain together. This prevents adjacent pitches from the same plate appearance from appearing in both training and evaluation data.
+
+The current split contains:
+
+- 131 training games;
+- 33 development games.
+
+### Important limitation
+
+The same 33 development games have been used repeatedly while testing features and model variants.
+
+They should therefore be treated as development or validation data, not as an untouched final test set.
+
+The next major validation step is:
+
+1. freeze the model and confidence thresholds;
+2. collect future Gausman games;
+3. evaluate them without changing the model;
+4. compare selective accuracy against simple baselines on the exact same pitches.
+
+Until then, the results should be read as:
+
+> A strong and stable development-set finding that motivates prospective evaluation.
+
+Not:
+
+> A proven estimate of future MLB performance.
+
+---
+
+## Repository structure
+
+```
+pitch_sitch/
+    Core data preparation, feature construction, models, and evaluation
+
+scripts/
+    Reproducible experiment entry points
+
+notes/
+    current-state.md
+    decisions.md
+    research-log.md
+    sessions/
+
+artifacts/
+    Saved outputs from selected experiments
+```
+
+For the shortest description of what is currently true, see:
+
+```
+notes/current-state.md
+```
+
+For accepted methodological choices and their rationale:
+
+```
+notes/decisions.md
+```
+
+For the chronological research history:
+
+```
+notes/research-log.md
+notes/sessions/
+```
+
+The main ensemble artifact is stored at:
+
+```
+artifacts/experiments/20260713-mlp-seed-ensemble-v1/
+```
+
+---
+
+## Next steps
+
+### Immediate
+
+- Add game-level bootstrap confidence intervals to the selective-prediction results.
+- Compare the ensemble against simple baselines on the exact high-confidence pitches it selects.
+- Freeze candidate confidence thresholds.
+- Evaluate prospectively on future untouched Gausman games.
+
+### Modelling
+
+- Investigate richer batter information.
+- Explore more targeted uses of bat-tracking measurements.
+- Model pitch location after pitch-type prediction is better established.
+
+### Generalization
+
+- Train a shared model across many pitchers.
+- Learn general pitch-selection structure.
+- Fine-tune the shared model to individual pitchers.
+- Compare adaptation against pitcher-specific training from scratch.
+
+---
+
+## Current conclusion
+
+The model is not yet a deployable MLB decision system.
+
+It is already a meaningful result.
+
+Across all pitches, the ensemble reaches 58.5% accuracy. When it is permitted to abstain, it identifies a much smaller set of situations where Gausman appears substantially more predictable:
+
+> Approximately **75% accuracy on 23% of pitches** at the current 65% confidence threshold.
+
+The central finding is therefore not simply that next-pitch prediction is possible.
+
+It is that **predictability is uneven**, and a model may be most valuable when it knows which situations are worth acting on.
